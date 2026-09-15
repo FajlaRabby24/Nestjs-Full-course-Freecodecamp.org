@@ -5,6 +5,7 @@ import {
   ManyToMany,
   ManyToOne,
   PrimaryGeneratedColumn,
+  type Relation,
 } from 'typeorm';
 import { Artist } from '../artists/artists.entity.js';
 import { Playlist } from '../playlists/playlists.entity.js';
@@ -30,7 +31,7 @@ export class Song {
   lyrics: string;
 
   @ManyToOne(() => Playlist, (playlist) => playlist.songs)
-  playlist: Playlist;
+  playlist: Relation<Playlist>;
 
   @ManyToMany(() => Artist, (artist) => artist.songs, { cascade: true })
   @JoinTable({ name: 'songs_artists' })

@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UpdateResult } from 'typeorm';
 import { CreateUserDTO } from '../users/dto/create-user.dto.js';
 import { User } from '../users/user.entity.js';
@@ -21,10 +22,16 @@ export interface AuthenticatedRequest extends Request {
   user: PayloadType;
 }
 @Controller('auth')
+@ApiTags('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('signup')
+  @ApiOperation({ summary: 'Register new user' })
+  @ApiResponse({
+    status: 201,
+    description: 'It will return the user in the response',
+  })
   signup(@Body() userDTO: CreateUserDTO): Promise<User> {
     return this.authService.signup(userDTO);
   }

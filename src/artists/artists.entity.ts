@@ -4,6 +4,7 @@ import {
   ManyToMany,
   OneToOne,
   PrimaryGeneratedColumn,
+  type Relation,
 } from 'typeorm';
 import { Song } from '../songs/song.entity.js';
 import { User } from '../users/user.entity.js';
@@ -15,8 +16,8 @@ export class Artist {
 
   @OneToOne(() => User)
   @JoinColumn()
-  user: User;
+  user: Relation<User>;
 
   @ManyToMany(() => Song, (song) => song.artists)
-  songs: Song[];
+  songs: Relation<Song[]>;
 }
