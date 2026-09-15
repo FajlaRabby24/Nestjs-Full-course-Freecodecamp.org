@@ -100,12 +100,9 @@ export class AuthService {
     }
   }
 
-  async validateUserByApiKey(apiKey: string): Promise<User> {
+  async validateUserByApiKey(apiKey: string): Promise<User | null> {
     const user = await this.userService.findByApiKey(apiKey);
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid API Key');
-    }
     return user;
   }
 

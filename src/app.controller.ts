@@ -6,6 +6,7 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
+  // @ApiBearerAuth('JWT-auth')
   getHello(): string {
     return this.appService.getHello();
   }

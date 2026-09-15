@@ -37,6 +37,11 @@ export class AuthController {
   }
 
   @Post('login')
+  @ApiOperation({ summary: 'Login user' })
+  @ApiResponse({
+    status: 201,
+    description: 'It will return the token for authentication',
+  })
   login(
     @Body() loginDto: LoginDto,
   ): Promise<
@@ -71,6 +76,7 @@ export class AuthController {
 
   @Get('profile')
   @UseGuards(AuthGuard('bearer'))
+  // @ApiBearerAuth('JWT-auth')
   getProfile(
     @Request()
     req: any,
