@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { SongsModule } from './songs/songs.module.js';
+import { AlbumsModule } from './albums/albums.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SongsModule } from './songs/songs.module.js';
     }),
     MongooseModule.forRoot(process.env.MONGODB_URI!),
     SongsModule,
+    AlbumsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
