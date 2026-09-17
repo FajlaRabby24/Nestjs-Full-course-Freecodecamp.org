@@ -11,13 +11,14 @@ export class Song {
   title: string;
 
   @Prop({ required: true })
-  releaseDate: Date;
+  releasedDate: Date;
 
   @Prop({
     required: true,
   })
   duration: string;
 
+  @Prop()
   lyrics: string;
 }
 
