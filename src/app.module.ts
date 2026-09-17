@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { typeOrmAsyncConfiguration } from '../db/data-source.js';
@@ -7,12 +7,10 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { ArtistsModule } from './artists/artists.module.js';
 import { AuthModule } from './auth/auth.module.js';
-import { LoggerMiddleware } from './common/middleware/logger.middleware.js';
 import { DevConfigService } from './common/providers/DevConfigService.js';
 import configuration from './config/configuration.js';
 import { PlayListModule } from './playlists/playlists.module.js';
 import { SeedModule } from './seed/seed.module.js';
-import { SongsController } from './songs/songs.controller.js';
 import { SongsModule } from './songs/songs.module.js';
 import { UsersModule } from './users/users.module.js';
 
@@ -27,11 +25,11 @@ const proConfig = {
   imports: [
     ConfigModule.forRoot({
       envFilePath: [
-        `${process.env.NODE_ENV}.env`,
-        '.env.development',
-        '.env.production',
-        '.env.local',
-        '.env',
+        `${process.cwd()}/.env.${process.env.NODE_ENV}`,
+        `${process.cwd()}/.env.${process.env.NODE_ENV || 'development'}`,
+        `${process.cwd()}/.env.development`,
+        `${process.cwd()}/.env.local`,
+        `${process.cwd()}/.env`,
       ],
       isGlobal: true,
       load: [configuration],
@@ -60,10 +58,11 @@ const proConfig = {
     },
   ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    // consumer.apply(LoggerMiddleware).forRoutes('songs'); // * option 1
-    // consumer.apply(LoggerMiddleware).forRoutes({path: "songs", method: RequestMethod.POST}) // * option 2
-    consumer.apply(LoggerMiddleware).forRoutes(SongsController); // * option 3
-  }
-}
+// export class AppModule implements NestModule {
+//   configure(consumer: MiddlewareConsumer) {
+//     // consumer.apply(LoggerMiddleware).forRoutes('songs'); // * option 1
+//     // consumer.apply(LoggerMiddleware).forRoutes({path: "songs", method: RequestMethod.POST}) // * option 2
+//     consumer.apply(LoggerMiddleware).forRoutes(SongsController); // * option 3
+//   }
+// }
+export class AppModule {}
