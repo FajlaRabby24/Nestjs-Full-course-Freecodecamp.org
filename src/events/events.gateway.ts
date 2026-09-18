@@ -4,7 +4,9 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
+  WsResponse,
 } from '@nestjs/websockets';
+import { Observable, of } from 'rxjs';
 import { Server } from 'socket.io';
 
 @WebSocketGateway({
@@ -27,8 +29,12 @@ export class EventsGateway implements OnModuleInit {
   handleMessage(
     @MessageBody()
     data: any,
-  ) {
+  ): Observable<WsResponse<any>> {
     console.log('Message receieved from client');
     console.log(data);
+    return of({
+      event: 'message',
+      data: 'MESSAGE RETURNED FROM SERVER: HELLO',
+    });
   }
 }
