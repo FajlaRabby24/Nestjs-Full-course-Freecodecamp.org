@@ -1,0 +1,29 @@
+// ==============================================================================================
+// 🟢 STEP 3.3 of 11: ROOM & ROOM_MEMBER MODELS DEFINITION
+// ==============================================================================================
+// Represents public and private chat channels (#general, #tech-talk, #random).
+// RoomMember is the junction table representing users in a room.
+// ==============================================================================================
+
+model Room {
+  id          String        @id @default(uuid())
+  name        String        @unique
+  description String?
+  isPrivate   Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+
+  members     RoomMember[]
+  messages    Message[]
+}
+
+model RoomMember {
+  id       String   @id @default(uuid())
+  userId   String
+  roomId   String
+  joinedAt DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roomId])
+}

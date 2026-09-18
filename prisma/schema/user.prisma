@@ -1,0 +1,21 @@
+// ==============================================================================================
+// 🟢 STEP 3.2 of 11: USER MODEL DEFINITION
+// ==============================================================================================
+// Represents authenticated users in the chat system.
+// Relations:
+//  - sentMessages: Messages sent by this user
+//  - receivedMessages: Direct 1-on-1 messages received by this user
+//  - roomMemberships: Channels this user has joined
+// ==============================================================================================
+
+model User {
+  id               String        @id @default(uuid())
+  username         String        @unique
+  email            String        @unique
+  avatar           String?
+  createdAt        DateTime      @default(now())
+
+  sentMessages     Message[]     @relation("SentMessages")
+  receivedMessages Message[]     @relation("ReceivedMessages")
+  roomMemberships  RoomMember[]
+}

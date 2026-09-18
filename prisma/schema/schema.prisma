@@ -1,0 +1,19 @@
+// ==============================================================================================
+// 🟢 STEP 3.1 of 11: PRISMA MULTI-FILE SCHEMA CONFIGURATION
+// ==============================================================================================
+// Configures Prisma to use multi-file schema folder structure and PostgreSQL.
+//
+// 👉 PREVIOUS STEP: "src/app.module.ts" (STEP 2 of 11)
+// 👉 RELATED FILES: "prisma/schema/user.prisma", "room.prisma", "message.prisma"
+// 👉 NEXT STEP: Open "src/prisma/prisma.service.ts" (STEP 4 of 11) for the NestJS database service.
+// ==============================================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["prismaSchemaFolder"] // Enables multi-file schema in Prisma 6+
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}

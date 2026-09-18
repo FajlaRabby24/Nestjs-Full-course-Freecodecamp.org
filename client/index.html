@@ -1,32 +1,895 @@
-<html>
-  <head>
-    <body>
-      <p>Please check the console for the message reply</p>
-    </body>
-    <script
-      src="https://cdn.socket.io/4.3.2/socket.io.min.js"
-      integrity="sha384-KAZ4DtjNhLChOB/hxXuKqhMLYvx3b5MlT55xPEiNmREKRzeEm+RVPlTnAn0ajQNs"
-      crossorigin="anonymous"
-    ></script>
-    <script>
-      const socket = io('http://localhost:3000');
-      socket.on('connect', function () {
-        console.log('Connected');
-        // Send Message to Websocket Server
-        socket.emit('message', { msg: 'I am the client again' });
+<!--
+==============================================================================================
+🟢 STEP 11 of 11: FRONTEND WEBSOCKET CLIENT (SOCKET.IO)
+==============================================================================================
+This is the interactive frontend dashboard where you can test the entire WebSocket workflow.
+
+What happens here:
+ 11.1: Multi-User Switcher (Alice, Bob, Charlie) fetching JWT token from REST API.
+ 11.2: Socket initialization with `auth: { token }` passed in the handshake.
+ 11.3: Listening to live events: `connect`, `user_online`, `user_offline`, `new_message`, `new_direct_message`, `user_typing`.
+ 11.4: Joining channels (`#general`) and receiving DB history via Acknowledgement callbacks.
+ 11.5: Sending public & 1-on-1 messages with delivery Ack confirmation.
+ 11.6: Emitting typing indicators with debouncing.
+ 11.7: Live Debug Console displaying real-time WebSocket frames.
+
+👉 PREVIOUS STEP: "src/events/events.gateway.ts" (STEP 10 of 11)
+==============================================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Socket.IO Real-Time Chat & Learning Hub (NestJS + Prisma)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg-main: #090d16;
+      --bg-sidebar: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-light: rgba(99, 102, 241, 0.15);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --bubble-self: #4f46e5;
+      --bubble-other: #1e293b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: var(--bg-sidebar);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .brand-text h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-text p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .user-profile-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .user-select-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .user-select-group span {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .user-btn {
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .user-btn.active {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    .status-dot.disconnected {
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+    }
+
+    .app-container {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 65px);
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 280px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .sidebar-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    .item-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .channel-item, .user-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .channel-item:hover, .user-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-main);
+    }
+
+    .channel-item.active, .user-item.active {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #3b82f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .online-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      margin-left: auto;
+    }
+
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-main);
+      position: relative;
+    }
+
+    .chat-header {
+      padding: 16px 24px;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chat-header-info h2 {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chat-header-info p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .messages-container {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .system-banner {
+      align-self: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+    }
+
+    .message-group {
+      display: flex;
+      gap: 12px;
+      max-width: 75%;
+    }
+
+    .message-group.self {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message-content {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .message-header {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .message-author {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .message-time {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .message-bubble {
+      padding: 10px 16px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--bubble-other);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      word-break: break-word;
+    }
+
+    .message-group.self .message-bubble {
+      background: var(--bubble-self);
+      border: none;
+      color: #fff;
+    }
+
+    .typing-indicator-bar {
+      height: 24px;
+      padding: 0 24px;
+      font-size: 12px;
+      color: var(--primary);
+      font-style: italic;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chat-input-area {
+      padding: 16px 24px;
+      background: var(--bg-sidebar);
+      border-top: 1px solid var(--border-color);
+    }
+
+    .input-form {
+      display: flex;
+      gap: 12px;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px 18px;
+      color: var(--text-main);
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .chat-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-light);
+    }
+
+    .send-btn {
+      padding: 0 22px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .send-btn:hover {
+      background: var(--primary-hover);
+    }
+
+    .debug-panel {
+      width: 320px;
+      background: #020617;
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .debug-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text-muted);
+    }
+
+    .debug-logs {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .log-item {
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.02);
+      border-left: 3px solid var(--primary);
+      line-height: 1.4;
+    }
+
+    .log-item.event-sent { border-left-color: #3b82f6; }
+    .log-item.event-received { border-left-color: #10b981; }
+    .log-item.event-error { border-left-color: #ef4444; }
+
+    .log-time { color: #64748b; font-size: 10px; }
+  </style>
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">⚡</div>
+      <div class="brand-text">
+        <h1>NestJS WebSocket Hub</h1>
+        <p>Socket.IO • JWT Auth • Rooms • PostgreSQL Persistence</p>
+      </div>
+    </div>
+
+    <div class="user-profile-bar">
+      <!-- 11.1: User Switcher -->
+      <div class="user-select-group">
+        <span>Switch User:</span>
+        <button class="user-btn active" onclick="switchUser('Alice')">Alice</button>
+        <button class="user-btn" onclick="switchUser('Bob')">Bob</button>
+        <button class="user-btn" onclick="switchUser('Charlie')">Charlie</button>
+      </div>
+
+      <!-- Connection status indicator -->
+      <div class="connection-status" id="connectionStatus">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-container">
+    <!-- Sidebar: Channels & Online Users -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-title">Public Channels</div>
+        <ul class="item-list" id="channelList">
+          <li class="channel-item active" onclick="selectChannel('general')"># general</li>
+          <li class="channel-item" onclick="selectChannel('tech-talk')"># tech-talk</li>
+          <li class="channel-item" onclick="selectChannel('random')"># random</li>
+        </ul>
+      </div>
+
+      <div class="sidebar-section" style="flex: 1;">
+        <div class="sidebar-title">Online Users (Direct Message)</div>
+        <ul class="item-list" id="onlineUserList">
+          <li style="font-size: 12px; color: var(--text-muted); padding: 8px;">No other users online</li>
+        </ul>
+      </div>
+    </aside>
+
+    <!-- Main Chat Feed -->
+    <main class="chat-area">
+      <div class="chat-header">
+        <div class="chat-header-info">
+          <h2 id="currentChatTitle"># general</h2>
+          <p id="currentChatDesc">Public discussion room with database history persistence</p>
+        </div>
+      </div>
+
+      <div class="messages-container" id="messagesContainer">
+        <div class="system-banner">Welcome to the WebSocket Real-Time Chat demo!</div>
+      </div>
+
+      <div class="typing-indicator-bar" id="typingIndicator"></div>
+
+      <div class="chat-input-area">
+        <form class="input-form" onsubmit="handleSendMessage(event)">
+          <input
+            type="text"
+            id="messageInput"
+            class="chat-input"
+            placeholder="Type your message here... (Press Enter to send)"
+            autocomplete="off"
+            oninput="handleTypingInput()"
+          />
+          <button type="submit" class="send-btn">Send 🚀</button>
+        </form>
+      </div>
+    </main>
+
+    <!-- Real-Time Event Debug Console -->
+    <aside class="debug-panel">
+      <div class="debug-header">
+        <span>Socket.IO Live Events</span>
+        <button onclick="clearLogs()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:11px;">Clear</button>
+      </div>
+      <div class="debug-logs" id="debugLogs"></div>
+    </aside>
+  </div>
+
+  <script>
+    const SERVER_URL = 'http://localhost:3000';
+
+    // Demo Users Registry
+    const DEMO_USERS = {
+      Alice: { id: 'user-alice-uuid-001', username: 'Alice', email: 'alice@example.com' },
+      Bob: { id: 'user-bob-uuid-002', username: 'Bob', email: 'bob@example.com' },
+      Charlie: { id: 'user-charlie-uuid-003', username: 'Charlie', email: 'charlie@example.com' }
+    };
+
+    let currentUser = DEMO_USERS.Alice;
+    let currentToken = '';
+    let socket = null;
+    let currentTarget = { type: 'room', id: 'general' };
+    let typingTimer = null;
+    let isCurrentlyTyping = false;
+
+    /**
+     * 11.2: CONNECT SOCKET WITH JWT HANDSHAKE AUTH
+     */
+    async function initConnection() {
+      // 11.2.1: Fetch JWT token from REST API
+      try {
+        const res = await fetch(`${SERVER_URL}/auth/demo-users`);
+        const users = await res.json();
+        const matched = users.find(u => u.username === currentUser.username);
+        if (matched) currentToken = matched.token;
+      } catch (err) {
+        logEvent('error', 'Could not fetch JWT token from REST API. Fallback token used.');
+      }
+
+      if (socket) {
+        socket.disconnect();
+      }
+
+      logEvent('sent', `Connecting socket for ${currentUser.username}...`);
+
+      // 11.2.2: Pass token in handshake auth object
+      socket = io(SERVER_URL, {
+        auth: { token: currentToken },
+        query: { username: currentUser.username }
       });
 
-      socket.on('message', function (data) {
-        console.log('event ', data);
-      });
-      socket.on('exception', function (data) {
-        console.log('event', data);
-      });
-      socket.on('disconnect', function () {
-        console.log('Disconnected');
-      });
-    </script>
-  </head>
+      /**
+       * 11.3: REGISTER EVENT LISTENERS
+       */
 
-  <body></body>
+      // 11.3.1: Connect Event
+      socket.on('connect', () => {
+        updateStatus(true);
+        logEvent('received', `Connected with Socket ID: ${socket.id}`);
+        if (currentTarget.type === 'room') {
+          joinRoom(currentTarget.id);
+        }
+      });
+
+      // 11.3.2: Disconnect Event
+      socket.on('disconnect', () => {
+        updateStatus(false);
+        logEvent('received', 'Socket disconnected');
+      });
+
+      // 11.3.3: Connection Success Confirmation
+      socket.on('connection_success', (data) => {
+        logEvent('received', `Auth Verified! User: ${data.user.username}`);
+        if (data.onlineUsers) {
+          renderOnlineUsers(data.onlineUsers);
+        }
+      });
+
+      // 11.3.4: Online / Offline Presence
+      socket.on('user_online', (data) => {
+        logEvent('received', `🟢 User online: ${data.username}`);
+        addSystemMessage(`${data.username} is now online`);
+        refreshOnlineUsers();
+      });
+
+      socket.on('user_offline', (data) => {
+        logEvent('received', `🔴 User offline: ${data.username}`);
+        addSystemMessage(`${data.username} went offline`);
+        refreshOnlineUsers();
+      });
+
+      socket.on('online_users', (users) => {
+        renderOnlineUsers(users);
+      });
+
+      // 11.3.5: Room Member Join/Leave
+      socket.on('user_joined_room', (data) => {
+        if (currentTarget.type === 'room' && currentTarget.id === data.roomId) {
+          addSystemMessage(`${data.user.username} joined the room`);
+        }
+      });
+
+      socket.on('user_left_room', (data) => {
+        if (currentTarget.type === 'room' && currentTarget.id === data.roomId) {
+          addSystemMessage(`${data.user.username} left the room`);
+        }
+      });
+
+      // 11.3.6: Public Room Message Received
+      socket.on('new_message', (message) => {
+        logEvent('received', `Message in #${message.roomId}: "${message.content}"`);
+        if (currentTarget.type === 'room' && currentTarget.id === message.roomId) {
+          appendMessage(message);
+        }
+      });
+
+      // 11.3.7: 1-on-1 Direct Message Received
+      socket.on('new_direct_message', (message) => {
+        logEvent('received', `Direct Message: "${message.content}"`);
+        if (
+          currentTarget.type === 'direct' &&
+          (currentTarget.id === message.senderId || currentTarget.id === message.recipientId)
+        ) {
+          appendMessage(message);
+        } else {
+          logEvent('received', `🔔 New DM from ${message.senderName}`);
+        }
+      });
+
+      // 11.3.8: Real-Time Typing Indicator
+      socket.on('user_typing', (data) => {
+        const indicator = document.getElementById('typingIndicator');
+        if (data.isTyping) {
+          indicator.textContent = `✍️ ${data.user.username} is typing...`;
+        } else {
+          indicator.textContent = '';
+        }
+      });
+
+      // 11.3.9: Exception Handling
+      socket.on('exception', (error) => {
+        logEvent('error', `WsException: ${error.message}`);
+        alert(`WebSocket Error: ${error.message}`);
+      });
+    }
+
+    /**
+     * 11.4: USER SWITCHING
+     */
+    function switchUser(username) {
+      document.querySelectorAll('.user-btn').forEach(b => {
+        b.classList.toggle('active', b.textContent === username);
+      });
+      currentUser = DEMO_USERS[username];
+      initConnection();
+    }
+
+    /**
+     * 11.5: JOIN ROOM WITH DATABASE HISTORY ACKNOWLEDGEMENT
+     */
+    function selectChannel(roomId) {
+      currentTarget = { type: 'room', id: roomId };
+      document.querySelectorAll('.channel-item').forEach(el => {
+        el.classList.toggle('active', el.textContent.includes(roomId));
+      });
+      document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
+
+      document.getElementById('currentChatTitle').textContent = `# ${roomId}`;
+      document.getElementById('currentChatDesc').textContent = `Public channel #${roomId}`;
+      
+      joinRoom(roomId);
+    }
+
+    function joinRoom(roomId) {
+      document.getElementById('messagesContainer').innerHTML = '';
+      logEvent('sent', `join_room: #${roomId}`);
+
+      // Emit join_room and receive history in Ack callback
+      socket.emit('join_room', { roomId }, (response) => {
+        if (response && response.history) {
+          logEvent('received', `Loaded ${response.history.length} past messages for #${roomId}`);
+          response.history.forEach(appendMessage);
+        }
+      });
+    }
+
+    /**
+     * 11.6: SELECT 1-ON-1 DIRECT MESSAGE
+     */
+    function selectUserDM(userId, username) {
+      currentTarget = { type: 'direct', id: userId, username };
+      document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.user-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.userId === userId);
+      });
+
+      document.getElementById('currentChatTitle').textContent = `@ ${username}`;
+      document.getElementById('currentChatDesc').textContent = `Private 1-on-1 Direct Message with ${username}`;
+
+      document.getElementById('messagesContainer').innerHTML = '';
+      socket.emit('get_dm_history', { recipientId: userId }, (response) => {
+        if (response && response.history) {
+          response.history.forEach(appendMessage);
+        }
+      });
+    }
+
+    /**
+     * 11.7: SEND MESSAGE WITH DELIVERY ACKNOWLEDGEMENT (ACK)
+     */
+    function handleSendMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById('messageInput');
+      const content = input.value.trim();
+      if (!content) return;
+
+      const payload = {
+        content,
+        roomId: currentTarget.type === 'room' ? currentTarget.id : undefined,
+        recipientId: currentTarget.type === 'direct' ? currentTarget.id : undefined
+      };
+
+      logEvent('sent', `send_message -> ${JSON.stringify(payload)}`);
+
+      // Emit 'send_message' with Ack confirmation callback
+      socket.emit('send_message', payload, (ack) => {
+        logEvent('received', `Message Ack: status=${ack.status}, id=${ack.messageId}`);
+      });
+
+      input.value = '';
+      stopTyping();
+    }
+
+    /**
+     * 11.8: TYPING INDICATOR WITH DEBOUNCE
+     */
+    function handleTypingInput() {
+      if (!isCurrentlyTyping) {
+        isCurrentlyTyping = true;
+        emitTyping(true);
+      }
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(stopTyping, 1500);
+    }
+
+    function stopTyping() {
+      if (isCurrentlyTyping) {
+        isCurrentlyTyping = false;
+        emitTyping(false);
+      }
+    }
+
+    function emitTyping(isTyping) {
+      if (!socket) return;
+      socket.emit('typing', {
+        isTyping,
+        roomId: currentTarget.type === 'room' ? currentTarget.id : undefined,
+        recipientId: currentTarget.type === 'direct' ? currentTarget.id : undefined
+      });
+    }
+
+    // DOM Helpers
+    function appendMessage(msg) {
+      const container = document.getElementById('messagesContainer');
+      const isSelf = msg.senderId === currentUser.id || msg.senderName === currentUser.username;
+
+      const group = document.createElement('div');
+      group.className = `message-group ${isSelf ? 'self' : ''}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'user-avatar';
+      avatar.textContent = (msg.senderName || 'U')[0].toUpperCase();
+
+      const content = document.createElement('div');
+      content.className = 'message-content';
+
+      const header = document.createElement('div');
+      header.className = 'message-header';
+      header.innerHTML = `
+        <span class="message-author">${isSelf ? 'You' : msg.senderName}</span>
+        <span class="message-time">${new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+      `;
+
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+      bubble.textContent = msg.content;
+
+      content.appendChild(header);
+      content.appendChild(bubble);
+
+      group.appendChild(avatar);
+      group.appendChild(content);
+
+      container.appendChild(group);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function addSystemMessage(text) {
+      const container = document.getElementById('messagesContainer');
+      const banner = document.createElement('div');
+      banner.className = 'system-banner';
+      banner.textContent = text;
+      container.appendChild(banner);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function renderOnlineUsers(users) {
+      const list = document.getElementById('onlineUserList');
+      const others = users.filter(u => u.username !== currentUser.username);
+
+      if (others.length === 0) {
+        list.innerHTML = '<li style="font-size: 12px; color: var(--text-muted); padding: 8px;">No other users online. Open another browser tab to test!</li>';
+        return;
+      }
+
+      list.innerHTML = '';
+      others.forEach(user => {
+        const li = document.createElement('li');
+        li.className = 'user-item';
+        li.dataset.userId = user.id;
+        li.onclick = () => selectUserDM(user.id, user.username);
+        li.innerHTML = `
+          <div class="user-avatar">${user.username[0]}</div>
+          <span>${user.username}</span>
+          <span class="online-indicator"></span>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    function refreshOnlineUsers() {
+      if (socket) socket.emit('get_online_users');
+    }
+
+    function updateStatus(connected) {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      if (connected) {
+        dot.className = 'status-dot';
+        text.textContent = 'Connected';
+      } else {
+        dot.className = 'status-dot disconnected';
+        text.textContent = 'Disconnected';
+      }
+    }
+
+    function logEvent(type, message) {
+      const logs = document.getElementById('debugLogs');
+      const item = document.createElement('div');
+      item.className = `log-item event-${type}`;
+      const time = new Date().toLocaleTimeString();
+      item.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
+      logs.prepend(item);
+    }
+
+    function clearLogs() {
+      document.getElementById('debugLogs').innerHTML = '';
+    }
+
+    // Auto-connect on page load
+    window.addEventListener('load', initConnection);
+  </script>
+</body>
 </html>
