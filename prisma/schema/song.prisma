@@ -1,0 +1,8 @@
+model Song {
+    id    String @id @default(uuid())
+    title String
+    url   String @unique
+
+    author   User   @relation(fields: [authorId], references: [id])
+    authorId String
+}
